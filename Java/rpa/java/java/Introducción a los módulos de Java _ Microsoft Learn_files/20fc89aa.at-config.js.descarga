@@ -1,0 +1,116 @@
+'use strict';
+
+(function () {
+	// The following IIFE is provided by Martech/Adobe. Do not modify.
+	// Properties are configured at https://experience.adobe.com/#/@mscom/target/setup/properties
+	var at_property = 'bdabb721-9b44-aabd-3839-ac91540d91f8'; // "Microsoft Docs (Prod)"
+	!(function () {
+		function tt_getCookie(t) {
+			var e = RegExp(t + '[^;]+').exec(document.cookie);
+			return decodeURIComponent(e ? e.toString().replace(/^[^=]+./, '') : '');
+		}
+		var t = tt_getCookie('MC1'),
+			e = tt_getCookie('MSFPC');
+		function o(t) {
+			return t.split('=')[1].slice(0, 32);
+		}
+		var n = '';
+		if ('' != t) n = o(t);
+		else if ('' != e) n = o(e);
+		if (n.length > 0) var r = n;
+		if (n.length > 0 && at_property != '') {
+			window.targetPageParams = function () {
+				return {
+					mbox3rdPartyId: r,
+					at_property: at_property
+				};
+			};
+		} else if (at_property != '') {
+			window.targetPageParams = function () {
+				return {
+					at_property: at_property
+				};
+			};
+		}
+
+		window.targetGlobalSettings = {
+			deviceIdLifetime: 34186698000
+		};
+	})();
+
+	// Measure target's performance. Lux picks up the perf marks.
+	!(function () {
+		var eventTypes = [
+			'at-library-loaded',
+			'at-request-start',
+			'at-request-succeeded',
+			'at-request-failed',
+			'at-content-rendering-start',
+			'at-content-rendering-succeeded',
+			'at-content-rendering-failed',
+			'at-content-rendering-no-offers',
+			'at-content-rendering-redirect'
+		];
+		/**
+		 * @param {Event} event
+		 */
+		function markEvent(event) {
+			performance.mark(event.type);
+		}
+		eventTypes.forEach(function (type) {
+			document.addEventListener(type, markEvent);
+		});
+	})();
+
+	// Disable body hiding by default.
+	// https://martech.azurewebsites.net/website-tools/adobe-target/implementation/library-integration/
+	window.targetGlobalSettings = { bodyHidingEnabled: false };
+
+	// Add APIs to determine whether an experience is enabled. These are not part
+	// of the adobe.target global defined by at.js.
+	!(function () {
+		/**
+		 * A promise that resolves when target has retrieved the activity details.
+		 * @type {Promise<any>}
+		 */
+		var atRequestSucceeded = new Promise(function (resolve, reject) {
+			document.addEventListener('at-request-succeeded', resolve);
+			document.addEventListener('at-request-failed', reject);
+		});
+
+		/**
+		 * Get whether an experience is enabled for the current page view.
+		 * @param {string} activityName
+		 * @param {string} experienceName
+		 */
+		function isExperienceEnabled(activityName, experienceName) {
+			return atRequestSucceeded
+				.then(function (event) {
+					if (!event.detail || !event.detail.responseTokens) {
+						return false;
+					}
+					return (
+						event.detail.responseTokens.find(function (t) {
+							return t['activity.name'] === activityName && t['experience.name'] === experienceName;
+						}) !== undefined
+					);
+				})
+				.catch(function () {
+					return false;
+				});
+		}
+
+		// Measure how long it takes for target to become active
+		atRequestSucceeded.then(() => (window.adobeTarget.loadTime = performance.now()));
+
+		// Export to adobeTarget global.
+		window.adobeTarget = {
+			atRequestSucceeded: atRequestSucceeded,
+			isExperienceEnabled: isExperienceEnabled
+		};
+	})();
+
+	window.adobeTarget.getContentExperiment = function getContentExperiment() {
+		return null;
+	};
+})();
